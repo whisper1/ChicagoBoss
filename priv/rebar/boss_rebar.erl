@@ -515,49 +515,62 @@ vm_name_arg(BossConf, AppFile) ->
   vm_name_arg(BossConf, AppFile, "").
 
 vm_name_arg(BossConf, AppFile, Prefix) ->
+  % ChicagoBoss seems to have some weirdness in how it handles names, snames, 
+  % registering nodes, etc. This fragment builds a -name parameter to the VM 
+  % out of sname@[first-ipv4-address-that-isn't-a-loopback].
+  % This seems kludgy to me but a better approach doesn't spring to mind.
+  {ok, Interfaces} = inet:getifaddrs(),
+  Addrs = lists:flatten([proplists:get_all_values(addr, element(2, Interface)) || Interface <- Interfaces]),
+  IpV4Addrs = lists:filter(fun (Addr) -> tuple_size(Addr) =:=  4 end, Addrs),
+  IpV4AddrsExcludingLoopback = lists:filter(fun (Addr) -> Addr =/=  {127,0,0,1} end, IpV4Addrs),
+  HostAddr = case IpV4AddrsExcludingLoopback of
+               [] -> "127.0.0.1";
+               Ip -> inet_parse:ntoa(lists:nth(1, Ip))
+             end,
   case vm_name(BossConf, AppFile) of
-    {sname, SName} -> io_lib:format("-sname ~s~s", [Prefix, SName]);
-    {name, Name} -> io_lib:format("-name ~s~s", [Prefix, Name])
+    {sname, Sname} -> io_lib:format("-name ~s@~s", [Sname, HostAddr]);
+    {name, Name} -> exit("Config must specify a vm_sname, not a vm_name")                                
   end.
 
 
+
 vm_args(BossConf) ->
-    case boss_config_value(BossConf, boss, vm_args) of
-        {error, _} ->
-            "";
-        VmArgs ->
-            " "++VmArgs
-    end.
+  case boss_config_value(BossConf, boss, vm_args) of
+    {error, _} ->
+      "";
+    VmArgs ->
+      " "++VmArgs
+  end.
 
 cookie_option(BossConf) ->
-    case boss_config_value(BossConf, boss, vm_cookie) of
-        {error, _} ->
-            "";
-      Cookie ->
-        "-setcookie "++Cookie
-    end.
+  case boss_config_value(BossConf, boss, vm_cookie) of
+    {error, _} ->
+      "";
+    Cookie ->
+      "-setcookie "++Cookie
+  end.
 
 
 max_processes(BossConf) ->
-    boss_config_value(BossConf, boss, vm_max_processes, 32768).
+  boss_config_value(BossConf, boss, vm_max_processes, 32768).
 
 erl_command() ->
-    case os:type() of 
-        {win32, _} -> "werl";
-        _ -> "exec erl"
-    end.
+  case os:type() of 
+    {win32, _} -> "werl";
+    _ -> "exec erl"
+  end.
 
 report_bad_client_version_and_exit(BossConf) ->
-    io:format("ERROR: Your boss_rebar plugin is outdated~nPlease copy it again from your updated ChicagoBoss installation:~nGuessed command:~ncp ~s/skel/priv/rebar/boss_plugin.erl priv/rebar/boss_plugin.erl~n", [boss_config_value(BossConf, boss, path)]), 
-    halt(1).
+  io:format("ERROR: Your boss_rebar plugin is outdated~nPlease copy it again from your updated ChicagoBoss installation:~nGuessed command:~ncp ~s/skel/priv/rebar/boss_plugin.erl priv/rebar/boss_plugin.erl~n", [boss_config_value(BossConf, boss, path)]), 
+  halt(1).
 
 report_old_erlang_version_and_exit(Vsn) ->
-    io:format("ERROR: Your Erlang version is too old. Required at least ~s, found ~s\n ", [?ERLANG_MIN_VERSION, Vsn]),
-    halt(1).
+  io:format("ERROR: Your Erlang version is too old. Required at least ~s, found ~s\n ", [?ERLANG_MIN_VERSION, Vsn]),
+  halt(1).
 
 tail_or_cwd([]) ->
-    {ok, Path} = file:get_cwd(),
-    lists:reverse(filename:split(Path));
+  {ok, Path} = file:get_cwd(),
+  lists:reverse(filename:split(Path));
 tail_or_cwd(Tail) ->
-    Tail.
+  Tail.
 
