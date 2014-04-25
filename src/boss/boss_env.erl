@@ -25,10 +25,14 @@ setup_boss_env() ->
     end.			
 
 get_env(App, Key, Default) when is_atom(App), is_atom(Key) ->
-    case application:get_env(App, Key) of
-        {ok, Val} -> Val;
-        _ -> Default
-    end.
+%    case application:get_env(App, Key) of
+%        {ok, Val} -> Val;
+%        _ -> Default
+%    end.
+  case wconfig:env(App, Key) of
+    undefined -> Default;
+    Val -> Val
+  end.
 
 get_env(Key, Default) when is_atom(Key) ->
     get_env(boss, Key, Default).
