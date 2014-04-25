@@ -484,12 +484,6 @@ app_name(AppFile) ->
 	[{application, AppName, _}] = app_config(AppFile),
 	AppName.
 
-host_name(sname) ->
-	{ok, Host} = inet:gethostname(),
-	Host;
-host_name(name) ->
-  net_adm:localhost().
-
 get_boss_path(BossConf)->
     case boss_config_value(BossConf, boss, path) of
         {error, _}->
@@ -507,31 +501,33 @@ vm_name(BossConf, AppFile) ->
     end.
 
 wm_qualified_name({sname, Nodename}) ->
-      io_lib:format("~s@~s", [Nodename, host_name(sname)]);
+      io_lib:format("~s@~s", [Nodename, node_addr()]);
 wm_qualified_name({name, Nodename}) ->
-      io_lib:format("~s", [Nodename]).
+  exit("Config must specify a vm_sname, not a vm_name").
 
 vm_name_arg(BossConf, AppFile) ->
   vm_name_arg(BossConf, AppFile, "").
 
 vm_name_arg(BossConf, AppFile, Prefix) ->
+  HostAddr = node_addr(),
+  case vm_name(BossConf, AppFile) of
+    {sname, Sname} -> io_lib:format("-name ~s~s@~s", [Prefix, Sname, HostAddr]);
+    {name, Name} -> exit("Config must specify a vm_sname, not a vm_name")                                
+  end.
+
+node_addr() -> 
   % ChicagoBoss seems to have some weirdness in how it handles names, snames, 
-  % registering nodes, etc. This fragment builds a -name parameter to the VM 
-  % out of sname@[first-ipv4-address-that-isn't-a-loopback].
+  % registering nodes, etc. We are going to use names of the form:
+  % sname@[first-ipv4-address-that-isn't-a-loopback].
   % This seems kludgy to me but a better approach doesn't spring to mind.
   {ok, Interfaces} = inet:getifaddrs(),
   Addrs = lists:flatten([proplists:get_all_values(addr, element(2, Interface)) || Interface <- Interfaces]),
   IpV4Addrs = lists:filter(fun (Addr) -> tuple_size(Addr) =:=  4 end, Addrs),
   IpV4AddrsExcludingLoopback = lists:filter(fun (Addr) -> Addr =/=  {127,0,0,1} end, IpV4Addrs),
-  HostAddr = case IpV4AddrsExcludingLoopback of
-               [] -> "127.0.0.1";
-               Ip -> inet_parse:ntoa(lists:nth(1, Ip))
-             end,
-  case vm_name(BossConf, AppFile) of
-    {sname, Sname} -> io_lib:format("-name ~s@~s", [Sname, HostAddr]);
-    {name, Name} -> exit("Config must specify a vm_sname, not a vm_name")                                
+  case IpV4AddrsExcludingLoopback of
+    [] -> "127.0.0.1";
+    Ip -> inet_parse:ntoa(lists:nth(1, Ip))
   end.
-
 
 
 vm_args(BossConf) ->
